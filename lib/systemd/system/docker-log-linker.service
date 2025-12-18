@@ -1,0 +1,11 @@
+[Unit]
+Description=Docker log linker service
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/docker-log-linker
+
+[Install]
+WantedBy=multi-user.target

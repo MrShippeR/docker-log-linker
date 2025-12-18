@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ======================================================
+# Docker Log Linker
+# Creates symlinks to container logs for monitoring tools
+# ======================================================
+
+CONFIG_FILE="/etc/docker-log-linker/docker-log-linker.conf"
+TEST_MODE=false
+
+# -----------------------------
+# Handle script arguments
+# -----------------------------
+if [[ "${1-}" == "test" ]]; then
+    TEST_MODE=true
+    echo "[docker-log-linker] Running in TEST mode"
+fi
+
+# -----------------------------
+# Helper functions
+# -----------------------------
+log() {
+    local msg="$1"
+    local timestamp
+    timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+    echo "[$timestamp] $msg" | tee -a "${MAIN_LOGFILE:-/dev/null}"
+}
+
+die() {
+    log "ERROR: $1"
+    exit 1
+}
+
+# -----------------------------
+# Load configuration
+# -----------------------------
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    die "Configuration file not found: $CONFIG_FILE"
+fi
+
+# shellcheck source=/dev/null
+source "$CONFIG_FILE"
+
+# Validate MODE
+[[ "$MODE" != "ONE_PLACE" && "$MODE" != "SEPARATELY_DEFINED" ]] && die "Invalid MODE: $MODE"
+
+# Validate CREATE_ALL_CONTAINERS_LOGS
+if [[ "$CREATE_ALL_CONTAINERS_LOGS" != "true" && "$CREATE_ALL_CONTAINERS_LOGS" != "false" ]]; then
+    die "CREATE_ALL_CONTAINERS_LOGS must be true or false"
+fi
+
+# -----------------------------
+# Wait for Docker daemon
+# -----------------------------
+if ! command -v docker >/dev/null 2>&1; then
+    die "Docker command not found"
+fi
+
+sleep "$DELAY_AFTER_DOCKER_START"
+
+if ! docker info >/dev/null 2>&1; then
+    die "Docker daemon not available"
+fi
+
+# -----------------------------
+# Prepare target directories
+# -----------------------------
+if [[ "$MODE" == "ONE_PLACE" ]]; then
+    mkdir -p "${CENTRAL_DIRECTORY:-/var/log/docker-log-linker}" || \
+        die "Cannot create central directory: $CENTRAL_DIRECTORY"
+fi
+
+# -----------------------------
+# Build container list
+# -----------------------------
+declare -A container_map  # key=container_name_or_id, value=target_dir
+
+if [[ "$CREATE_ALL_CONTAINERS_LOGS" == "true" ]]; then
+    while read -r cid cname _; do
+        cid_short="${cid:0:12}"
+        if [[ "$MODE" == "ONE_PLACE" ]]; then
+            container_map["$cname"]="$CENTRAL_DIRECTORY"
+        else
+            die "SEPARATELY_DEFINED mode requires containers to be defined in config"
+        fi
+    done < <(docker ps --format '{{.ID}} {{.Names}}')
+else
+    # Parse [CONTAINERS] section
+    in_section=false
+    while IFS= read -r line; do
+        line="${line%%#*}"   # remove comments
+        line="${line// /}"   # remove spaces
+        [[ -z "$line" ]] && continue
+
+        if [[ "$line" =~ ^\[CONTAINERS\] ]]; then
+            in_section=true
+            continue
+        fi
+        [[ "$in_section" != true ]] && continue
+
+        if [[ "$MODE" == "ONE_PLACE" ]]; then
+            container_map["$line"]="$CENTRAL_DIRECTORY"
+        else
+            # SEPARATELY_DEFINED line format: container:target_dir
+            if [[ "$line" =~ ^([^:]+):(.+)$ ]]; then
+                container_map["${BASH_REMATCH[1]}"]="${BASH_REMATCH[2]}"
+            else
+                log "WARNING: Invalid line in config: $line"
+                continue
+            fi
+        fi
+    done < "$CONFIG_FILE"
+fi
+
+# -----------------------------
+# Create symlinks
+# -----------------------------
+for key in "${!container_map[@]}"; do
+    target_dir="${container_map[$key]}"
+    mkdir -p "$target_dir" || { log "ERROR: Cannot create directory $target_dir"; continue; }
+
+    # Determine actual container ID
+    container_id=""
+    if docker inspect "$key" >/dev/null 2>&1; then
+        container_id="$key"
+    else
+        # Try to find by name
+        container_id="$(docker ps --format '{{.ID}} {{.Names}}' | awk -v name="$key" '$2==name {print $1}')"
+        if [[ -z "$container_id" ]]; then
+            log "WARNING: Container $key not found, skipping"
+            continue
+        fi
+    fi
+
+    log_path="$(docker inspect --format='{{.LogPath}}' "$container_id")"
+    if [[ ! -f "$log_path" ]]; then
+        log "WARNING: Log file for $key ($container_id) not found, skipping"
+        continue
+    fi
+
+    link_name="$target_dir/${key}.log"
+
+    if $TEST_MODE; then
+        echo "[TEST] Would link: $link_name -> $log_path"
+        continue
+    fi
+
+    ln -sf "$log_path" "$link_name" || { log "ERROR: Cannot create symlink $link_name"; continue; }
+    chown -h "$LINK_OWNER_USER":"$LINK_OWNER_GROUP" "$link_name" || log "WARNING: Cannot chown $link_name"
+
+    log "Linked: $link_name -> $log_path"
+done
+
+log "Done."
+

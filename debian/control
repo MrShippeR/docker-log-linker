@@ -1,0 +1,8 @@
+Package: docker-log-linker
+Version: 1.0.0
+Section: admin
+Priority: optional
+Architecture: all
+Depends: docker-ce
+Maintainer: Marek Vach <marek@vach.cz>
+Description: Docker log linker is minimalist package running on systemd. It start's after docker-ce package and is executed once. Log linker will get dynamic path of docker container log file and create symlink to this log. So you can target logs of specific containers by another program, because path is consist. Log linker is configured in /etc/docker-log-linker  
