@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+chmod +x /usr/local/bin/docker-log-linker
+
+systemctl daemon-reload
+
+# systemctl enable docker-log-linker.service >/dev/null || true
+# systemctl start docker-log-linker.service >/dev/null || true
+
+exit 0

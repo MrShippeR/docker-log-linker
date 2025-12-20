@@ -1,3 +1,0 @@
-#!/bin/bash
-set -e
-# Cleanup if needed (not critical for minimalist app)
