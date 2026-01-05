@@ -7,7 +7,15 @@ and this project adheres to Semantic Versioning.
 
 ---
 
-## [1.2] - 2025-01-21
+## [1.3] - 2026-01-05
+### Modified
+ - fix logging, path to main logfile is now defined in program
+ - edited CHOWN to be just for directories
+ - fix if no containers is running
+
+---
+
+## [1.2] - 2025-12-23
 
 ### Added
  - fixing SEPARATELY_DEFINED mode
@@ -15,7 +23,7 @@ and this project adheres to Semantic Versioning.
 
 ---
 
-## [1.1] - 2025-01-21
+## [1.1] - 2025-12-15
 
 ### Added
  - more logging messages
@@ -26,7 +34,7 @@ and this project adheres to Semantic Versioning.
 
 ---
 
-## [1.0] - 2025-01-20
+## [1.0] - 2025-12-14
 
 ### Added
 - Initial release

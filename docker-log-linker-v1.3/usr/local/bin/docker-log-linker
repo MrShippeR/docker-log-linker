@@ -7,6 +7,7 @@ set -euo pipefail
 # ======================================================
 
 CONFIG_FILE="/etc/docker-log-linker/docker-log-linker.conf"
+MAIN_LOGFILE="/var/log/docker-log-linker/docker-log-linker.log"
 TEST_MODE=false
 
 # ======================================================
@@ -35,7 +36,7 @@ log() {
     local ts
     ts="$(date '+%Y-%m-%d %H:%M:%S')"
 
-    if $TEST_MODE; then
+    if [[ "$TEST_MODE" == true ]]; then
         echo "[$ts] $msg"
     else
         echo "[$ts] $msg" | tee -a "${MAIN_LOGFILE:-/dev/null}"
@@ -51,13 +52,13 @@ my_create_directory() {
     local dir="${1%/}"
 
     if $TEST_MODE; then
-        echo "[TEST] Would create directory: $dir (owner: $LINK_OWNER_USER:$LINK_OWNER_GROUP)"
+        echo "[TEST] Would create directory: $dir (owner: $DIR_OWNER_USER:$DIR_OWNER_GROUP)"
         return 0
     fi
 
     if [[ ! -d "$dir" ]]; then
         mkdir -p "$dir" || die "Cannot create directory: $dir"
-        chown "$LINK_OWNER_USER:$LINK_OWNER_GROUP" "$dir" || \
+        chown "$DIR_OWNER_USER:$DIR_OWNER_GROUP" "$dir" || \
             log "WARNING: Cannot set owner for $dir"
         log "Created directory: $dir"
     fi
@@ -103,6 +104,11 @@ load_configuration_global() {
           "$CREATE_ALL_CONTAINERS_LOGS" != "false" ]]; then
         die "CREATE_ALL_CONTAINERS_LOGS must be true or false, now is $CREATE_ALL_CONTAINERS_LOGS"
     fi
+    
+    if [[ "$CREATE_ALL_CONTAINERS_LOGS" == "true" && "$MODE" != "ONE_PLACE" ]]; then
+        log "INFO: Changing value MODE to ONE_PLACE because CREATE_ALL_CONTAINERS_LOGS is true."
+        MODE="ONE_PLACE"
+    fi
 }
 
 load_configuration_containers_section() {
@@ -126,7 +132,7 @@ parse_configuration_containers_one_place() {
         container_name+=("$entry")
         container_id+=("")
         container_source_des+=("")
-        container_target_des+=("${CENTRAL_DIRECTORY%/}")
+        container_target_des+=("${CENTRAL_LOG_DIRECTORY%/}")
     done
 
     if [[ "${#container_name[@]}" -eq 0 ]]; then
@@ -162,21 +168,26 @@ parse_configuration_containers_separately_defined() {
 # Container discovery (ALL containers)
 # ======================================================
 prepare_list_of_all_containers() {
-    [[ "$MODE" != "ONE_PLACE" ]] && \
-        die "CREATE_ALL_CONTAINERS_LOGS requires MODE=ONE_PLACE"
+    my_create_directory "$CENTRAL_LOG_DIRECTORY"
 
-    my_create_directory "$CENTRAL_DIRECTORY"
+    mapfile -t running_containers < <(docker ps --format '{{.ID}} {{.Names}}')
+    if [[ "${#running_containers[@]}" -eq 0 ]]; then
+        die "No running Docker containers found"
+    fi
 
-    while read -r cid cname _; do
+    for line in "${running_containers[@]}"; do
+        cname="${line#* }"
+        cid="${line%% *}"
+
         container_name+=("$cname")
         container_id+=("$cid")
         container_source_des+=("")
-        container_target_des+=("${CENTRAL_DIRECTORY%/}")
-    done < <(docker ps --format '{{.ID}} {{.Names}}')
+        container_target_des+=("${CENTRAL_LOG_DIRECTORY%/}")
+    done
 
-    [[ "${#container_name[@]}" -eq 0 ]] && \
-        die "No running Docker containers found"
+    log "Found ${#container_name[@]} running Docker container(s)."
 }
+
 
 # ======================================================
 # Container inspection
@@ -228,10 +239,7 @@ create_symlinks() {
         fi
 
         ln -sf "$src" "$link" || log "ERROR: Cannot create symlink $link"
-        chown -h "$LINK_OWNER_USER:$LINK_OWNER_GROUP" "$link" || \
-            log "WARNING: Cannot chown $link"
-            
-        log "$link"
+        log "Linked: $link"
     done
 }
 
@@ -242,11 +250,11 @@ log "Starting Docker Log Linker."
 
 load_configuration_global
 wait_for_docker
-load_configuration_containers_section
 
 if [[ "$CREATE_ALL_CONTAINERS_LOGS" == "true" ]]; then
     prepare_list_of_all_containers
 else
+    load_configuration_containers_section
     case "$MODE" in
         ONE_PLACE)
             parse_configuration_containers_one_place
