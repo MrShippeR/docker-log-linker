@@ -29,13 +29,14 @@ Utility can be fully automated by enabling service `# systemctl enable docker-lo
 ## Installation and configuration
 Download .deb package from github release folder and install it with package manager. For example:
 ``` bash
-$ sudo dpkg -i docker-log-linker_1.0.deb
+$ sudo dpkg -i ./docker-log-linker_v*.deb
 # or
-$ sudo apt install docker-log-linker_1.0.deb
+$ sudo apt install ./docker-log-linker_v*.deb
 ```
 
 Customize configuration file to match your situation:
 ``` bash
+$ docker ps # to get name or ID of container
 $ sudo nano /etc/docker-log-linker/docker-log-linker.conf
 ```
 
@@ -73,4 +74,11 @@ If you:
 - want to submit a patch or enhancement
 
 please open an **Issue** or **Pull Request** on GitHub.
+
+## Uninstall
+``` bash
+$ dpkg --remove docker-log-linker
+# or
+$ sudo apt-get remove docker-log-linker
+```
 
