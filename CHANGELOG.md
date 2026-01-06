@@ -7,6 +7,15 @@ and this project adheres to Semantic Versioning.
 
 ---
 
+## [1.4] - 2026-01-06
+### Added
+ - IF variables are defined in GLOBAL section of config file before using
+ - changing default settings for config file
+ - added what to change in guide create-deb-package-command.md
+ - fixing error states in running code to be exited with comment in log file
+
+---
+
 ## [1.3] - 2026-01-05
 ### Modified
  - fix logging, path to main logfile is now defined in program
