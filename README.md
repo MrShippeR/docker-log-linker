@@ -4,7 +4,7 @@ A minimalist terminal utility that create symbolic links to internal log files o
 
 ## Features
 - Creates **symbolic links** to internal logs of running Docker containers
-- Configuratable user and group owner of symlinks
+- Configuratable user and group owner of paths to log files
 - CREATE_ALL_CONTAINERS_LOGS:
   - **false** - symlinks will be created only for containers defined in config file 
   - **true**  - symlinks for all started containers
@@ -30,8 +30,6 @@ Utility can be fully automated by enabling service `# systemctl enable docker-lo
 Download .deb package from github release folder and install it with package manager. For example:
 ``` bash
 $ sudo dpkg -i ./docker-log-linker_v*.deb
-# or
-$ sudo apt install ./docker-log-linker_v*.deb
 ```
 
 Customize configuration file to match your situation:
