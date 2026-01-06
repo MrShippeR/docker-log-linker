@@ -2,6 +2,8 @@
 set -e
 
 chmod +x /usr/local/bin/docker-log-linker
+mkdir -p /var/log/docker-log-linker
+touch /var/log/docker-log-linker/docker-log-linker.log
 
 systemctl daemon-reload
 

@@ -34,7 +34,7 @@ declare -a _containers_raw
 log() {
     local msg="$1"
     local ts
-    ts="$(date '+%Y-%m-%d %H:%M:%S')"
+    ts="$(TZ=:/etc/localtime date '+%Y-%m-%d %H:%M:%S')"
 
     if [[ "$TEST_MODE" == true ]]; then
         echo "[$ts] $msg"
@@ -45,6 +45,7 @@ log() {
 
 die() {
     log "ERROR: $1"
+    log "Exiting program because of defined error in code happened."
     exit 1
 }
 
@@ -75,7 +76,7 @@ wait_for_docker() {
     while ! docker version >/dev/null 2>&1; do
         ((tries++))
         if (( tries > max_tries )); then
-            die "Docker daemon not available after $max_tries tries"
+            die "Docker daemon not available after $max_tries tries."
         fi
         log "Docker daemon not ready yet, waiting 1s..."
         sleep 1
@@ -95,9 +96,17 @@ load_configuration_global() {
     eval "$(
         sed '/^\[CONTAINERS\]/,$d' "$CONFIG_FILE"
     )"
+    
+    if [[ -z "${MODE+x}" ]]; then
+        die "MODE is not defined in configuration. Variable MODE must be set to value ONE_PLACE or SEPARATELY_DEFINED."
+    fi
 
     if [[ "$MODE" != "ONE_PLACE" && "$MODE" != "SEPARATELY_DEFINED" ]]; then
         die "Invalid MODE: $MODE"
+    fi
+    
+    if [[ -z "${CREATE_ALL_CONTAINERS_LOGS+x}" ]]; then
+        die "CREATE_ALL_CONTAINERS_LOGS is not defined in configuration. Variable CREATE_ALL_CONTAINERS_LOGS must be set to value true or false."
     fi
 
     if [[ "$CREATE_ALL_CONTAINERS_LOGS" != "true" && \
@@ -132,7 +141,7 @@ parse_configuration_containers_one_place() {
         container_name+=("$entry")
         container_id+=("")
         container_source_des+=("")
-        container_target_des+=("${CENTRAL_LOG_DIRECTORY%/}")
+        container_target_des+=("${CENTRAL_DIRECTORY%/}")
     done
 
     if [[ "${#container_name[@]}" -eq 0 ]]; then
@@ -168,11 +177,9 @@ parse_configuration_containers_separately_defined() {
 # Container discovery (ALL containers)
 # ======================================================
 prepare_list_of_all_containers() {
-    my_create_directory "$CENTRAL_LOG_DIRECTORY"
-
     mapfile -t running_containers < <(docker ps --format '{{.ID}} {{.Names}}')
     if [[ "${#running_containers[@]}" -eq 0 ]]; then
-        die "No running Docker containers found"
+        die "No running Docker containers found."
     fi
 
     for line in "${running_containers[@]}"; do
@@ -182,7 +189,7 @@ prepare_list_of_all_containers() {
         container_name+=("$cname")
         container_id+=("$cid")
         container_source_des+=("")
-        container_target_des+=("${CENTRAL_LOG_DIRECTORY%/}")
+        container_target_des+=("${CENTRAL_DIRECTORY%/}")
     done
 
     log "Found ${#container_name[@]} running Docker container(s)."
